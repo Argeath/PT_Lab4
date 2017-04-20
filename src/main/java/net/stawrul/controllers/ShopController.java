@@ -2,7 +2,7 @@ package net.stawrul.controllers;
 
 import net.stawrul.model.Order;
 import net.stawrul.services.OrdersService;
-import net.stawrul.services.exceptions.OutOfStockException;
+import net.stawrul.services.exceptions.ValidationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -12,8 +12,6 @@ import java.util.List;
 import java.util.UUID;
 
 import static java.util.Objects.isNull;
-import net.stawrul.services.exceptions.EmptyOrderException;
-import net.stawrul.services.exceptions.OrderTooValuableException;
 
 /**
  * Kontroler obejmujący akcje na zamówieniach.
@@ -63,15 +61,15 @@ public class ShopController {
      * @return odpowiedź 201 Created zawierająca nagłówek Location z adresem nowego zamówienia lub odpowiedź 422
      * Unprocessable Entity, jeśli zamówienie zostało odrzucone (np. z powodu braku produktów)
      */
-    @PostMapping(value = "/orders", produces = "application/json")
-    public ResponseEntity addOrder(@RequestBody Order order, UriComponentsBuilder uriBuilder) {
+    @PostMapping(value = "/orders")
+    public ResponseEntity<String> addOrder(@RequestBody Order order, UriComponentsBuilder uriBuilder) {
         try {
             ordersService.placeOrder(order);
             URI location = uriBuilder.path("/orders/{id}").buildAndExpand(order.getId()).toUri();
             return ResponseEntity.created(location).build();
 
-        } catch (OutOfStockException | EmptyOrderException | OrderTooValuableException e) {
-            return ResponseEntity.unprocessableEntity().body("{\n\t\"error\": \"" + e.getMessage() + "\"\n}");
+        } catch (ValidationException e) {
+            return ResponseEntity.unprocessableEntity().body(e.getMessage());
         }
     }
 }

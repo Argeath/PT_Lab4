@@ -23,7 +23,7 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <java.version>1.8</java.version>
 
-        <surefire.tests.skip>true</surefire.tests.skip>
+        <surefire.tests.skip>false</surefire.tests.skip>
     </properties>
 
     <dependencies>

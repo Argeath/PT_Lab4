@@ -2,14 +2,12 @@ package net.stawrul.services;
 
 import net.stawrul.model.Book;
 import net.stawrul.model.Order;
-import net.stawrul.services.exceptions.OutOfStockException;
+import net.stawrul.services.exceptions.ValidationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.persistence.EntityManager;
 import java.util.List;
-import net.stawrul.services.exceptions.EmptyOrderException;
-import net.stawrul.services.exceptions.OrderTooValuableException;
 
 /**
  * Komponent (serwis) biznesowy do realizacji operacji na zamówieniach.
@@ -47,28 +45,36 @@ public class OrdersService extends EntityService<Order> {
      */
     @Transactional
     public void placeOrder(Order order) {
+        validate(order);
+        save(order);
+    }
+
+    private void validate(Order order) {
         if(order.getBooks().isEmpty())
-            throw new EmptyOrderException();
-        
+            throw new ValidationException("Empty order");
+
         int sumCost = 0;
-        
+
         for (Book bookStub : order.getBooks()) {
             Book book = em.find(Book.class, bookStub.getId());
 
-            if (book.getAmount() < 1) {
-                //wyjątek z hierarchii RuntineException powoduje wycofanie transakcji (rollback)
-                throw new OutOfStockException();
-            } else {
-                int newAmount = book.getAmount() - 1;
-                book.setAmount(newAmount);
-                sumCost += book.getCost();
-            }
-        }
-        
-        if(sumCost > 150)
-            throw new OrderTooValuableException();
+            if(book == null)
+                throw new ValidationException("Book not found");
 
-        //jeśli wcześniej nie został wyrzucony wyjątek OutOfStockException, zamówienie jest zapisywane w bazie danych
-        save(order);
+            if(book.getCost() == null)
+                throw new ValidationException("Book has no cost");
+
+            if(book.getAmount() == null)
+                throw new ValidationException("Book has no amount");
+
+            if (book.getAmount() < 1)
+                throw new ValidationException("Book out of stock");
+
+            book.setAmount(book.getAmount() - 1);
+            sumCost += book.getCost();
+        }
+
+        if(sumCost > 150)
+            throw new ValidationException("Order too valuable");
     }
 }

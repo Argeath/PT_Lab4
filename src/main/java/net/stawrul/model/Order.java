@@ -2,8 +2,11 @@ package net.stawrul.model;
 
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.persistence.*;
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;

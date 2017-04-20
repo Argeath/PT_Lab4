@@ -2,6 +2,7 @@ package net.stawrul.controllers;
 
 import net.stawrul.model.Book;
 import net.stawrul.services.BooksService;
+import net.stawrul.services.exceptions.ValidationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -59,20 +60,20 @@ public class BooksController {
      * @return odpowiedź HTTP dla klienta
      */
     @PostMapping
-    public ResponseEntity<Void> addBook(@RequestBody Book book, UriComponentsBuilder uriBuilder) {
+    public ResponseEntity<String> addBook(@RequestBody Book book, UriComponentsBuilder uriBuilder) {
 
         if (booksService.find(book.getId()) == null) {
-            //Identyfikator nie istnieje w bazie danych - nowa książka zostaje zapisana
-            booksService.save(book);
+            try {
+                booksService.addBook(book);
 
-            //Jeśli zapisywanie się powiodło zwracana jest odpowiedź 201 Created z nagłówkiem Location, który zawiera
-            //adres nowo dodanej książki
-            URI location = uriBuilder.path("/books/{id}").buildAndExpand(book.getId()).toUri();
-            return ResponseEntity.created(location).build();
+                URI location = uriBuilder.path("/books/{id}").buildAndExpand(book.getId()).toUri();
+                return ResponseEntity.created(location).build();
+
+            } catch (ValidationException e) {
+                return ResponseEntity.unprocessableEntity().body(e.getMessage());
+            }
 
         } else {
-            //Identyfikator książki już istnieje w bazie danych. Żądanie POST służy do dodawania nowych elementów,
-            //więc zwracana jest odpowiedź z kodem błędu 409 Conflict
             return ResponseEntity.status(CONFLICT).build();
         }
     }
