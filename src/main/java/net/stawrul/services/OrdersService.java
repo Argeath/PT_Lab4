@@ -45,36 +45,71 @@ public class OrdersService extends EntityService<Order> {
      */
     @Transactional
     public void placeOrder(Order order) {
-        validate(order);
-        save(order);
-    }
-
-    private void validate(Order order) {
-        if(order.getBooks().isEmpty())
-            throw new ValidationException("Empty order");
-
-        int sumCost = 0;
-
+        validateOrder(order);
+        
         for (Book bookStub : order.getBooks()) {
             Book book = em.find(Book.class, bookStub.getId());
-
-            if(book == null)
-                throw new ValidationException("Book not found");
-
-            if(book.getCost() == null)
-                throw new ValidationException("Book has no cost");
-
-            if(book.getAmount() == null)
-                throw new ValidationException("Book has no amount");
-
-            if (book.getAmount() < 1)
-                throw new ValidationException("Book out of stock");
-
+            
+            validateBookAvailable(book);
             book.setAmount(book.getAmount() - 1);
-            sumCost += book.getCost();
         }
+        save(order);
+    }
+    
+    public int getTotalValue(Order order) {
+        int cost = 0;
+        
+        for(Book b: order.getBooks()) {
+            Book book = em.find(Book.class, b.getId());
+            cost += book.getCost();
+        }
+        
+        return cost;
+    }
 
-        if(sumCost > 150)
+    public void validateOrder(Order order) {
+        validateOrderNotEmpty(order);
+        
+        for (Book bookStub : order.getBooks()) {
+            Book book = em.find(Book.class, bookStub.getId());
+            validateBook(book);
+        }
+    }
+    
+    public void validateOrderSumCost(Order order) {
+        if(getTotalValue(order) > 150)
             throw new ValidationException("Order too valuable");
+    }
+    
+    public void validateOrderNotEmpty(Order order) {
+        if(order.getBooks().isEmpty())
+            throw new ValidationException("Empty order");
+    }
+    
+    public void validateBook(Book book) {
+        validateBookNotNull(book);
+        validateBookCostNotNull(book);
+        validateBookAmountNotNull(book);
+    }
+    
+    public void validateBookNotNull(Book bookStub) {
+        Book book = em.find(Book.class, bookStub.getId());
+        if(book == null)
+            throw new ValidationException("Book not found");
+    }
+    
+    public void validateBookCostNotNull(Book book) {
+        if(book.getCost() == null)
+            throw new ValidationException("Book has no cost");
+    }
+    
+    public void validateBookAmountNotNull(Book book) {
+        if(book.getAmount() == null)
+            throw new ValidationException("Book has no amount");
+    }
+    
+    public void validateBookAvailable(Book book) {
+        if (book.getAmount() < 1)
+            throw new ValidationException("Book out of stock");
     }
 }
