@@ -4,7 +4,6 @@ import net.stawrul.model.Book;
 import net.stawrul.model.Order;
 import net.stawrul.services.BooksService;
 import net.stawrul.services.OrdersService;
-import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -12,11 +11,11 @@ import org.mockito.Mockito;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import javax.persistence.EntityManager;
-import javax.validation.*;
 
 import java.util.UUID;
 
 import net.stawrul.services.exceptions.ValidationException;
+import org.junit.Assert;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -28,106 +27,82 @@ public class OrdersServiceTest {
     @Mock
     private EntityManager em;
 
-    private static Validator validator;
-
-    @BeforeClass
-    public static void setUp() {
-        ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
-        validator = factory.getValidator();
-    }
-
     @Test
-    public void whenOrderedBookNotAvailable_placeOrderThrowsOutOfStockEx() {
-        //Arrange
-        Order order = new Order();
+    public void whenOrderedBookNotAvailable_throwsException() {
         Book book = new Book();
         book.setAmount(0);
         book.setCost(25);
+
+        OrdersService ordersService = new OrdersService(em);
+
+        try {
+            ordersService.validateBookAvailable(book);
+            fail();
+        } catch(ValidationException e) {
+            assertEquals(e.getMessage(), "Book out of stock");
+        }
+    }
+    
+    @Test
+    public void whenOrderedBook_checkTotalValue() {
+        Order order = new Order();
+        Book book = new Book();
+        book.setTitle("abcdef");
+        book.setAmount(1);
+        book.setCost(34);
+        order.getBooks().add(book);
+
+        Mockito.when(em.find(Book.class, book.getId())).thenReturn(book);
+        
+        book = new Book();
+        book.setTitle("ghgfd");
+        book.setAmount(1);
+        book.setCost(61);
         order.getBooks().add(book);
 
         Mockito.when(em.find(Book.class, book.getId())).thenReturn(book);
 
         OrdersService ordersService = new OrdersService(em);
 
-        try {
-            ordersService.placeOrder(order);
-            fail();
-        } catch(ValidationException e) {
-            assertEquals(e.getMessage(), "Book out of stock");
-        }
+        ordersService.placeOrder(order);
+        Assert.assertEquals(95, ordersService.getTotalValue(order));
+    }
+    
+    @Test
+    public void whenOrderedTwoBooks_placeOrderDecreasesAmountsByOne() {
+        Order order = new Order();
+        Book book1 = new Book();
+        book1.setTitle("abcdef");
+        book1.setAmount(2);
+        book1.setCost(34);
+        order.getBooks().add(book1);
+
+        Mockito.when(em.find(Book.class, book1.getId())).thenReturn(book1);
+        
+        Book book2 = new Book();
+        book2.setTitle("ghgfd");
+        book2.setAmount(2);
+        book2.setCost(61);
+        order.getBooks().add(book2);
+
+        Mockito.when(em.find(Book.class, book2.getId())).thenReturn(book2);
+
+        OrdersService ordersService = new OrdersService(em);
+
+        ordersService.placeOrder(order);
+        
+        Assert.assertTrue(book1.getAmount().equals(1));
+        Assert.assertTrue(book2.getAmount().equals(1));
     }
 
     @Test
-    public void tooShortBooksTitle() {
-        Book book = new Book();
-        book.setTitle("abc");
-        book.setCost(32);
-        book.setAmount(2);
-
-        BooksService booksService = new BooksService(em);
-
-        try {
-            booksService.addBook(book);
-            fail();
-        } catch(ValidationException e) {
-            assertEquals(e.getMessage(), "Book title is too short");
-        }
-    }
-
-    @Test
-    public void emptyBooksCost() {
-        Book book = new Book();
-        book.setTitle("abcdef");
-        book.setAmount(2);
-
-        BooksService booksService = new BooksService(em);
-
-        try {
-            booksService.addBook(book);
-            fail();
-        } catch(ValidationException e) {
-            assertEquals(e.getMessage(), "Book has no cost");
-        }
-    }
-
-    @Test
-    public void emptyBooksAmount() {
-        Book book = new Book();
-        book.setTitle("abcdef");
-        book.setCost(25);
-
-        BooksService booksService = new BooksService(em);
-
-        try {
-            booksService.addBook(book);
-            fail();
-        } catch(ValidationException e) {
-            assertEquals(e.getMessage(), "Book has no amount");
-        }
-    }
-
-    @Test
-    public void isBookValid() {
-        Book book = new Book();
-        book.setTitle("abcdef");
-        book.setCost(34);
-        book.setAmount(2);
-
-        BooksService booksService = new BooksService(em);
-
-        booksService.addBook(book);
-
-        Mockito.verify(em, times(1)).persist(book);
-    }
-
-    @Test
-    public void emptyOrdersBookList() {
+    public void whenOrderIsEmpty_throwsException() {
         Order order = new Order();
 
         OrdersService ordersService = new OrdersService(em);
 
         try {
-            ordersService.placeOrder(order);
+            ordersService.validateOrderNotEmpty(order);
             fail();
         } catch(ValidationException e) {
             assertEquals(e.getMessage(), "Empty order");
@@ -135,15 +110,13 @@ public class OrdersServiceTest {
     }
 
     @Test
-    public void notFoundOrdersBook() {
-        Order order = new Order();
+    public void whenOrderBookNotFound_throwsException() {
         Book book = new Book(UUID.fromString("2c4fa53-2145-488f-a452-c4e5efd6fb95"));
-        order.getBooks().add(book);
 
         OrdersService ordersService = new OrdersService(em);
 
         try {
-            ordersService.placeOrder(order);
+            ordersService.validateBookNotNull(book);
             fail();
         } catch(ValidationException e) {
             assertEquals(e.getMessage(), "Book not found");
@@ -151,19 +124,15 @@ public class OrdersServiceTest {
     }
 
     @Test
-    public void emptyBookCost() {
-        Order order = new Order();
+    public void whenOrderedBookHasNoCost_throwsException() {
         Book book = new Book();
         book.setTitle("abcdef");
         book.setAmount(2);
-        order.getBooks().add(book);
-
-        Mockito.when(em.find(Book.class, book.getId())).thenReturn(book);
 
         OrdersService ordersService = new OrdersService(em);
 
         try {
-            ordersService.placeOrder(order);
+            ordersService.validateBookCostNotNull(book);
             fail();
         } catch(ValidationException e) {
             assertEquals(e.getMessage(), "Book has no cost");
@@ -171,19 +140,15 @@ public class OrdersServiceTest {
     }
 
     @Test
-    public void emptyBookAmount() {
-        Order order = new Order();
+    public void whenOrderedBookHasNoAmount_throwsException() {
         Book book = new Book();
         book.setTitle("abcdef");
         book.setCost(34);
-        order.getBooks().add(book);
-
-        Mockito.when(em.find(Book.class, book.getId())).thenReturn(book);
 
         OrdersService ordersService = new OrdersService(em);
 
         try {
-            ordersService.placeOrder(order);
+            ordersService.validateBookAmountNotNull(book);
             fail();
         } catch(ValidationException e) {
             assertEquals(e.getMessage(), "Book has no amount");
@@ -191,57 +156,23 @@ public class OrdersServiceTest {
     }
 
     @Test
-    public void isOrderValid() {
+    public void whenOrderIsTooValuable_throwsException() {
         Order order = new Order();
         Book book = new Book();
         book.setTitle("abcdef");
-        book.setCost(34);
+        book.setCost(160);
         book.setAmount(2);
         order.getBooks().add(book);
 
         Mockito.when(em.find(Book.class, book.getId())).thenReturn(book);
 
-        OrdersService ordersService = new OrdersService(em);
-
-        ordersService.placeOrder(order);
-
-        Mockito.verify(em, times(1)).persist(order);
-    }
-
-    @Test
-    public void whenOrderIsTooValuable() {
-        Order order = new Order();
-        Book book = new Book();
-        book.setTitle("abcdef");
-        book.setCost(71);
-        book.setAmount(2);
-        order.getBooks().add(book);
-        order.getBooks().add(book);
-
-        Mockito.when(em.find(Book.class, book.getId())).thenReturn(book);
-
-        book = new Book();
-        book.setTitle("abcdefgh");
-        book.setCost(55);
-        book.setAmount(3);
-        order.getBooks().add(book);
-
-        Mockito.when(em.find(Book.class, book.getId())).thenReturn(book);
-
-        book = new Book();
-        book.setTitle("fghdfs");
-        book.setCost(49);
-        book.setAmount(1);
-        order.getBooks().add(book);
-
-        Mockito.when(em.find(Book.class, book.getId())).thenReturn(book);
 
         OrdersService ordersService = new OrdersService(em);
 
-        assertEquals(order.getBooks().size(), 4);
+        assertEquals(order.getBooks().size(), 1);
 
         try {
-            ordersService.placeOrder(order);
+            ordersService.validateOrderSumCost(order);
             fail();
         } catch(ValidationException e) {
             assertEquals(e.getMessage(), "Order too valuable");
@@ -249,25 +180,20 @@ public class OrdersServiceTest {
     }
 
     @Test
-    public void whenOrderedBookAvailable_placeOrderDecreasesAmountByOne() {
-        //Arrange
+    public void whenOrderedBook_throwsNoException() {
         Order order = new Order();
         Book book = new Book();
-        book.setAmount(1);
-        book.setCost(38);
+        book.setTitle("abcdef");
+        book.setCost(50);
+        book.setAmount(4);
+        order.getBooks().add(book);
+        order.getBooks().add(book);
         order.getBooks().add(book);
 
         Mockito.when(em.find(Book.class, book.getId())).thenReturn(book);
 
         OrdersService ordersService = new OrdersService(em);
 
-        //Act
-        ordersService.placeOrder(order);
-
-        //Assert
-        //dostępna liczba książek zmniejszyła się:
-        assertEquals(0, (int)book.getAmount());
-        //nastąpiło dokładnie jedno wywołanie em.persist(order) w celu zapisania zamówienia:
-        Mockito.verify(em, times(1)).persist(order);
+        ordersService.validateOrder(order);
     }
 }
